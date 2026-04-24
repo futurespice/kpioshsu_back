@@ -25,7 +25,8 @@ services:
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-60}
     volumes:
-      - media:/app/media
+       - /home/myprojects/media:/app/media
+       - /home/myprojects/staticfiles:/app/staticfiles
     restart: unless-stopped
     depends_on:
       db:

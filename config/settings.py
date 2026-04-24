@@ -102,6 +102,9 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "users.User"
@@ -140,7 +143,10 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     o.strip() for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
 ]
-
+CSRF_TRUSTED_ORIGINS = [
+    "https://kpioshsu.com.kg",
+    "https://www.kpioshsu.com.kg",
+]
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "KPI OSHSU API",
