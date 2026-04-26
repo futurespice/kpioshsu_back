@@ -12,6 +12,15 @@ class PeriodType(models.TextChoices):
     YEAR = "year", "Year"
 
 
+class KPICategory(models.TextChoices):
+    SCIENCE = "science", "Наука"
+    TEACHING = "teaching", "Учебная работа"
+    METHODOLOGY = "methodology", "Методическая работа"
+    EDUCATION = "education", "Воспитательная работа"
+    LOAD = "load", "Нагрузка"
+    OTHER = "other", "Прочее"
+
+
 class KPI(BaseModel):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
@@ -22,6 +31,11 @@ class KPI(BaseModel):
             MinValueValidator(Decimal("0.0000")),
             MaxValueValidator(Decimal("1.0000")),
         ],
+    )
+    category = models.CharField(
+        max_length=20,
+        choices=KPICategory.choices,
+        default=KPICategory.OTHER,
     )
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(

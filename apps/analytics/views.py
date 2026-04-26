@@ -1,13 +1,17 @@
+from datetime import timedelta
+from decimal import Decimal
+
 from django.db.models import Sum
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.approvals.models import Approval, ApprovalStatus
 from apps.common.permissions import make_role_permission
 from apps.departments.models import Department
-from apps.documents.models import Document, DocType
+from apps.documents.models import Document, DocType, DocumentStatus
 from apps.faculties.models import Faculty
-from apps.kpi.models import KPIValue, PeriodType
+from apps.kpi.models import KPICategory, KPIValue, PeriodType
 from apps.kpi.services import (
     calculate_faculty_kpi,
     calculate_university_kpi,
@@ -15,7 +19,7 @@ from apps.kpi.services import (
 from apps.publications.models import Publication
 from apps.strategic.models import Grant, GrantStatus, Program, ProgramStatus, StrategicGoal
 from apps.strategic.serializers import StrategicGoalSerializer
-from apps.tasks.models import Task
+from apps.tasks.models import Task, TaskStatus
 from apps.users.models import Role, User
 
 
@@ -93,10 +97,43 @@ class UniversityFacultyKpiView(APIView):
 
 
 class UniversityRadarView(APIView):
+    """Профиль университета по категориям КПЭ (ТЗ v2 §9.1).
+
+    Для каждой категории KPICategory считается сумма (value × weight) по
+    всем активным значениям за указанный период, усреднённая по числу
+    преподавателей с данными в этой категории. Возвращает оси для radar-chart.
+    """
+
     permission_classes = [_IsUniReader]
 
     def get(self, request):
-        return Response([])
+        period_type, period_value = _period(request)
+        values = (
+            KPIValue.objects.filter(
+                period_type=period_type,
+                period_value=period_value,
+                kpi__is_active=True,
+            )
+            .select_related("kpi")
+        )
+
+        sums = {}
+        teacher_sets = {}
+        for v in values:
+            cat = v.kpi.category
+            sums[cat] = sums.get(cat, Decimal("0")) + v.value * v.kpi.weight
+            teacher_sets.setdefault(cat, set()).add(v.user_id)
+
+        labels = dict(KPICategory.choices)
+        data = []
+        for cat in KPICategory.values:
+            teachers = len(teacher_sets.get(cat, ()))
+            if teachers == 0:
+                avg = Decimal("0.00")
+            else:
+                avg = (sums[cat] / teachers).quantize(Decimal("0.01"))
+            data.append({"subject": labels[cat], "value": str(avg)})
+        return Response(data)
 
 
 class UniversityHeatmapView(APIView):
@@ -133,10 +170,71 @@ class UniversityGoalsView(APIView):
 
 
 class UniversityAlertsView(APIView):
+    """Уведомления для ректора (ТЗ v2 §9.1).
+
+    Источники: просроченные задачи, зависшие на согласовании документы,
+    низкий КПЭ факультетов. Ограничено 50 элементами, отсортировано по severity.
+    """
+
     permission_classes = [_IsRectorOnly]
 
+    LOW_FACULTY_KPI_THRESHOLD = Decimal("50.00")
+    DOC_STUCK_DAYS = 7
+    MAX_ITEMS = 50
+
     def get(self, request):
-        return Response([])
+        today = timezone.localdate()
+        period_type, period_value = _period(request)
+        items = []
+
+        overdue = Task.objects.filter(
+            deadline__lt=today,
+            deleted_at__isnull=True,
+        ).exclude(status__in=[TaskStatus.COMPLETED, TaskStatus.ROUTED])
+        for t in overdue[: self.MAX_ITEMS]:
+            items.append(
+                {
+                    "type": "overdue_task",
+                    "severity": "high",
+                    "title": t.title,
+                    "ref_id": str(t.id),
+                    "deadline": t.deadline.isoformat(),
+                }
+            )
+
+        stuck_before = timezone.now() - timedelta(days=self.DOC_STUCK_DAYS)
+        stuck_docs = Document.objects.filter(
+            status=DocumentStatus.PENDING,
+            created_at__lt=stuck_before,
+            deleted_at__isnull=True,
+        )
+        for d in stuck_docs[: self.MAX_ITEMS]:
+            items.append(
+                {
+                    "type": "stuck_document",
+                    "severity": "medium",
+                    "title": d.title,
+                    "ref_id": str(d.id),
+                    "doc_type": d.doc_type,
+                }
+            )
+
+        for f in Faculty.objects.filter(is_active=True):
+            kpi = calculate_faculty_kpi(f.id, period_type, period_value)
+            if kpi is not None and kpi < self.LOW_FACULTY_KPI_THRESHOLD:
+                items.append(
+                    {
+                        "type": "low_faculty_kpi",
+                        "severity": "high",
+                        "title": f"Низкий КПЭ: {f.name}",
+                        "ref_id": str(f.id),
+                        "kpi": str(kpi),
+                    }
+                )
+
+        order = {"high": 0, "medium": 1, "low": 2}
+        items.sort(key=lambda x: order.get(x["severity"], 9))
+        return Response(items[: self.MAX_ITEMS])
 
 
 class ViceRectorOverviewView(APIView):

@@ -14,6 +14,7 @@ class KPISerializer(serializers.ModelSerializer):
             "name",
             "description",
             "weight",
+            "category",
             "is_active",
             "created_by",
             "created_at",
