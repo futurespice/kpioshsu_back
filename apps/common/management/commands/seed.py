@@ -52,13 +52,9 @@ DEPARTMENTS = [
     ("Кафедра информатики", "ИТ", "Инженерный факультет", 1200),
     ("Кафедра прикладной математики", "МАТ", "Инженерный факультет", 1100),
     ("Кафедра экономики", "ЭКО", "Экономический факультет", 1000),
-    ("Кафедра менеджмента", "МНЖ", "Экономический факультет", 950),
     ("Кафедра истории", "ИСТ", "Гуманитарный факультет", 900),
     ("Кафедра философии", "ФИЛ", "Гуманитарный факультет", 850),
-    ("Кафедра литературы", "ЛИТ", "Гуманитарный факультет", 800),
     ("Кафедра физики", "ФИЗ", "Естественнонаучный факультет", 1050),
-    ("Кафедра химии", "ХИМ", "Естественнонаучный факультет", 980),
-    ("Кафедра биологии", "БИО", "Естественнонаучный факультет", 920),
 ]
 
 KPI_DEFS = [
@@ -154,7 +150,7 @@ class Command(BaseCommand):
         heads = self._create_heads(departments)
         teachers = self._create_teachers(departments)
         rector, vice_rector = self._create_top_management()
-        self._create_aux_management()
+        science, students_aff = self._create_aux_management()
 
         kpis = self._create_kpis(admin)
         self._create_kpi_values(teachers, kpis)
@@ -167,10 +163,19 @@ class Command(BaseCommand):
         self._create_strategic(faculties)
         self._create_notifications(rector, vice_rector, deans + heads + teachers)
 
-        self.stdout.write(self.style.SUCCESS("Seed завершён."))
-        self.stdout.write(f"Админ: admin@oshsu.kg / {DEFAULT_PASSWORD}")
-        self.stdout.write(f"Ректор: rector@oshsu.kg / {DEFAULT_PASSWORD}")
-        self.stdout.write(f"Проректор: vice@oshsu.kg / {DEFAULT_PASSWORD}")
+        total_users = 1 + 2 + 2 + len(deans) + len(heads) + len(teachers)
+        self.stdout.write(self.style.SUCCESS(f"Seed завершён. Всего пользователей: {total_users}"))
+        self.stdout.write("─" * 50)
+        self.stdout.write(f"Пароль для всех: {DEFAULT_PASSWORD}")
+        self.stdout.write("─" * 50)
+        self.stdout.write(f"Админ:        admin@oshsu.kg              (is_staff, is_superuser)")
+        self.stdout.write(f"Ректор:       rector@oshsu.kg")
+        self.stdout.write(f"Проректор:    vice@oshsu.kg")
+        self.stdout.write(f"НИО:          science@oshsu.kg")
+        self.stdout.write(f"Студ.отдел:   students@oshsu.kg")
+        self.stdout.write(f"Деканы:       dean1..dean{len(deans)}@oshsu.kg            ({len(deans)})")
+        self.stdout.write(f"Завкафедрой:  head1..head{len(heads)}@oshsu.kg            ({len(heads)})")
+        self.stdout.write(f"Преподы:      teacher1..teacher{len(teachers)}@oshsu.kg     ({len(teachers)})")
 
     # ---------- reset ----------
 
@@ -198,18 +203,44 @@ class Command(BaseCommand):
     # ---------- users ----------
 
     def _create_admin(self) -> User:
-        return _create_user(
-            _email("admin"), role=Role.ADMIN, full_name="Системный администратор"
+        email = _email("admin")
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                "full_name": "Системный администратор",
+                "role": Role.ADMIN,
+                "is_active": True,
+                "is_staff": True,
+                "is_superuser": True,
+            },
         )
+        if created:
+            user.set_password(DEFAULT_PASSWORD)
+            user.save(update_fields=["password"])
+        else:
+            update_fields = []
+            if not user.is_staff:
+                user.is_staff = True
+                update_fields.append("is_staff")
+            if not user.is_superuser:
+                user.is_superuser = True
+                update_fields.append("is_superuser")
+            if user.role != Role.ADMIN:
+                user.role = Role.ADMIN
+                update_fields.append("role")
+            if update_fields:
+                user.save(update_fields=update_fields)
+        return user
 
     def _create_top_management(self) -> tuple[User, User]:
         rector = _create_user(_email("rector"), role=Role.RECTOR, full_name="Ректор Университета")
         vice = _create_user(_email("vice"), role=Role.VICE_RECTOR, full_name="Проректор по учебной работе")
         return rector, vice
 
-    def _create_aux_management(self):
-        _create_user(_email("science"), role=Role.SCIENCE_DEP, full_name="Начальник НИО")
-        _create_user(_email("students"), role=Role.STUDENT_AFFAIRS, full_name="Начальник студенческого отдела")
+    def _create_aux_management(self) -> tuple[User, User]:
+        science = _create_user(_email("science"), role=Role.SCIENCE_DEP, full_name="Начальник НИО")
+        students = _create_user(_email("students"), role=Role.STUDENT_AFFAIRS, full_name="Начальник студенческого отдела")
+        return science, students
 
     def _create_faculties(self) -> dict[str, Faculty]:
         result = {}
@@ -269,7 +300,7 @@ class Command(BaseCommand):
         teachers = []
         idx = 0
         for dept in departments:
-            for _ in range(random.randint(3, 5)):
+            for _ in range(2):
                 idx += 1
                 first = random.choice(TEACHER_FIRST)
                 last = random.choice(TEACHER_LAST)
