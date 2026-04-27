@@ -10,14 +10,14 @@ from apps.common.validators import validate_oshsu_email
 
 
 class Role(models.IntegerChoices):
-    ADMIN = 0, "Admin"
-    RECTOR = 1, "Rector"
-    VICE_RECTOR = 2, "Vice-Rector"
-    SCIENCE_DEP = 3, "Science Department"
-    STUDENT_AFFAIRS = 4, "Student Affairs"
-    DEAN = 5, "Dean"
-    HEAD_OF_DEPT = 6, "Head of Department"
-    TEACHER = 7, "Teacher"
+    ADMIN = 0, "Админ"
+    RECTOR = 1, "Ректор"
+    VICE_RECTOR = 2, "Проректор"
+    SCIENCE_DEP = 3, "Научный отдел"
+    STUDENT_AFFAIRS = 4, "Отдел по делам студентов"
+    DEAN = 5, "Декан"
+    HEAD_OF_DEPT = 6, "Заведующий кафедрой"
+    TEACHER = 7, "Учитель"
 
 
 class UserManager(BaseUserManager):

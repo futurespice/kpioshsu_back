@@ -31,3 +31,8 @@ class MeSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["role"] = instance.get_role_display()
+        return data

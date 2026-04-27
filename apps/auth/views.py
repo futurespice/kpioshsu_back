@@ -20,6 +20,7 @@ def _issue_tokens(user):
     return {
         "acces": str(refresh.access_token),
         "refresh": str(refresh),
+        "user": MeSerializer(user).data,
     }
 
 

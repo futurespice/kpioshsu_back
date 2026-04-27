@@ -149,6 +149,6 @@ class MeViewTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data["email"], "t@oshsu.kg")
         self.assertEqual(res.data["full_name"], "Жооке Алиев")
-        self.assertEqual(res.data["role"], Role.DEAN.value)
+        self.assertEqual(res.data["role"], Role.DEAN.label)
         self.assertTrue(res.data["is_active"])
         self.assertIn("id", res.data)

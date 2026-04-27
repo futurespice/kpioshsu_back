@@ -35,3 +35,8 @@ class UserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["role"] = instance.get_role_display()
+        return data
